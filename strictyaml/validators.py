@@ -34,28 +34,10 @@ class OrValidator(Validator):
             location = YAMLLocation()
             document = copy.deepcopy(document)
 
-        error1 = None
-        error2 = None
-
         try:
-            validation_a = self._validator_a(document, location=location)
-        except YAMLValidationError as err:
-            error1 = err
-
-        try:
-            validation_b = self._validator_b(document, location=location)
-        except YAMLValidationError as err:
-            error2 = err
-
-        if error1 is None:
-            return validation_a
-        if error2 is None:
-            return validation_b
-
-        if error2 is not None:
-            raise error2
-        if error1 is not None:
-            raise error1
+            return self._validator_a(document, location=location)
+        except YAMLValidationError:
+            return self._validator_b(document, location=location)
 
 
 def strip_accoutrements(document):
@@ -66,8 +48,6 @@ def strip_accoutrements(document):
         return {key: strip_accoutrements(value) for key, value in document.items()}
     elif type(document) is CommentedSeq:
         return [strip_accoutrements(item) for item in document]
-    elif document is None:
-        return ""
     else:
         return str(document)
 
@@ -106,8 +86,8 @@ class Scalar(Validator):
 
 class Enum(Scalar):
     def __init__(self, restricted_to):
-        # TODO: Validate set or list
-        # TODO: Validate enum is always string
+        for element in restricted_to:
+            assert type(element) is str
         self._restricted_to = restricted_to
 
     def validate(self, document, location=None):
@@ -120,6 +100,32 @@ class Enum(Scalar):
             )
         else:
             return val
+
+
+class EmptyNone(Scalar):
+    def validate_scalar(self, document, location):
+        val = str(location.get(document))
+        if val != "":
+            raise_exception(
+                "when expecting an empty value",
+                "found non-empty value",
+                document, location=location,
+            )
+        else:
+            return self.empty()
+
+    def empty(self):
+        return None
+
+
+class EmptyDict(EmptyNone):
+    def empty(self):
+        return {}
+
+
+class EmptyList(EmptyNone):
+    def empty(self):
+        return []
 
 
 class Str(Scalar):
